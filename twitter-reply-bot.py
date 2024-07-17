@@ -1,15 +1,22 @@
+import requests
+import json
+import imgkit
+import redis
+import time
 import tweepy
+import os
+from io import BytesIO
+from PIL import Image
 from airtable import Airtable
 from datetime import datetime, timedelta
 import schedule
-import time
-import os
-import requests
 import logging
-import json
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# ... (Load environment variables for Twitter, Airtable, Chatbase)
+REDIS_URL = os.getenv("REDIS_URL", 'redis://localhost:6379')
 
 # Load your Twitter and Airtable API keys (preferably from environment variables, config file, or within the railyway app)
 TWITTER_API_KEY = os.getenv("TWITTER_API_KEY")
@@ -26,9 +33,23 @@ CHATBASE_API_KEY = os.getenv("CHATBASE_API_KEY")
 CHATBASE_API_URL = os.getenv("CHATBASE_API_URL")
 CHATBOT_ID = os.getenv("CHATBOT_ID")
 
+TEMPLATE_FILE_PATH = os.path.join(os.path.dirname(__file__), 'template.html')  # Get absolute path
+
+# Attempt to load template from file
+try:
+    with open(TEMPLATE_FILE_PATH, 'r', encoding='utf-8') as file:
+        HTML_TEMPLATE = file.read()
+except FileNotFoundError:
+    raise FileNotFoundError(f"Template file not found at: {TEMPLATE_FILE_PATH}")
+except Exception as e:
+    raise RuntimeError(f"Error loading HTML template: {e}")
+
 # Check if required variables are set
 if not all([TWITTER_API_KEY, TWITTER_API_SECRET, TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_TOKEN_SECRET, TWITTER_BEARER_TOKEN]):
     raise EnvironmentError("One or more Twitter API environment variables are not set.")
+
+def get_chatbot_response(user_message):
+    """Fetches response from Chatbase and always returns it as an image."""
 
 # Function to get Chatbase chatbot response with conversation context
 def get_chatbot_response(user_message):
@@ -52,14 +73,22 @@ def get_chatbot_response(user_message):
         response.raise_for_status()  
         json_data = response.json()
 
-        # Truncate the response text to 200 characters
-        truncated_text = json_data['text'][:200]
+        response_text = json_data['text']
 
-        return truncated_text 
+        # Truncate the response text to 200 characters, but allow up to 3000 for the image
+        truncated_text = response_text[:200]
+        formatted_html = HTML_TEMPLATE.replace("{response_text}", response_text[:3000])
+        
+        img = imgkit.from_string(formatted_html, False, options={
+            "width": 375, 
+            "height": 812,
+            "encoding": "UTF-8"
+        })
+        return Image.open(BytesIO(img)), truncated_text  # Return both the image and truncated text
 
     except requests.exceptions.RequestException as e:
         logging.error(f"Error getting Chatbase response: {e}")
-        return "I'm sorry, I couldn't process your request at this time."
+        return None, "I'm sorry, I couldn't process your request at this time."  # Return None for image and error message for text
 
 # TwitterBot class to help us organize our code and manage shared state
 class TwitterBot:
@@ -86,16 +115,24 @@ class TwitterBot:
     
     # Generate a response using the API
     def respond_to_mention(self, mention, mentioned_conversation_tweet):
-        response_text = self.generate_response(mentioned_conversation_tweet.text)
-        
-        # Try and create the response to the tweet. If it fails, log it and move on
-        try:
-            response_tweet = self.twitter_api.create_tweet(text=response_text, in_reply_to_tweet_id=mention.id)
-            self.mentions_replied += 1
-        except Exception as e:
-            print(e)
-            self.mentions_replied_errors += 1
-            return
+        response_image, response_text = self.generate_response(mentioned_conversation_tweet.text)  # Get both image and text
+    
+    # Try and create the response to the tweet. If it fails, log it and move on
+    try:
+        # First, upload the image to Twitter
+        media_id = self.twitter_api.media_upload(filename="response.png", file=response_image.tobytes())[0].media_id
+
+        # Then, create the tweet with both text and the uploaded image
+        response_tweet = self.twitter_api.create_tweet(
+            text=response_text, 
+            in_reply_to_tweet_id=mention.id,
+            media_ids=[media_id]  # Include the media ID here
+        )
+        self.mentions_replied += 1
+    except Exception as e:
+        print(e)
+        self.mentions_replied_errors += 1
+        return
         
         # Log the response in Airtable if it was successful
         self.airtable.insert({
