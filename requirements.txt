@@ -1,6 +1,11 @@
 requests
+json
 imgkit
+redis
+time
+tweepyow
 Pillow
 tweepy
 airtable-python-wrapper
 schedule
+logging
