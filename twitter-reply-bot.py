@@ -30,29 +30,28 @@ if not all([TWITTER_API_KEY, TWITTER_API_SECRET, TWITTER_ACCESS_TOKEN, TWITTER_A
     raise EnvironmentError("One or more Twitter API environment variables are not set.")
 
 # Function to get Chatbase chatbot response with conversation context
-def get_chatbot_response(user_message, conversation_id=None):
+def get_chatbot_response(user_message):
+    url = 'https://www.chatbase.co/api/v1/chat'
     headers = {
-        'Authorization': f'Bearer {CHATBASE_API_KEY}',
+        'Authorization': f'Bearer {os.environ.get("CHATBASE_API_KEY")}',
         'Content-Type': 'application/json'
     }
 
-    messages = [{"content": user_message, "role": "user"}]
-
-    if conversation_id:
-        # Fetch past messages using conversation_id (Implement your Airtable or other storage logic here)
-        past_messages = fetch_past_messages(conversation_id)
-        messages.extend(past_messages)  
-
+    # Only the current user message is included
     data = {
-        "messages": messages,
-        "chatbotId": CHATBOT_ID,
-        "stream": False 
+        "messages": [
+            {"content": user_message, "role": "user"}
+        ],
+        "chatbotId": os.environ.get("CHATBOT_ID"),
+        "stream": False,
+        "temperature": 0  # Adjust for creativity (0 is most deterministic)
     }
 
     try:
-        response = requests.post(CHATBASE_API_URL, headers=headers, json=data)
-        response.raise_for_status()  # Raise an exception for bad responses
-        return response.json()['text']
+        response = requests.post(url, headers=headers, data=json.dumps(data))
+        response.raise_for_status()
+        json_data = response.json()
+        return json_data['text']
     except requests.exceptions.RequestException as e:
         logging.error(f"Error getting Chatbase response: {e}")
         return "I'm sorry, I couldn't process your request at this time."
