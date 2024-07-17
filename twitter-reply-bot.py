@@ -29,9 +29,6 @@ CHATBOT_ID = os.getenv("CHATBOT_ID")
 if not all([TWITTER_API_KEY, TWITTER_API_SECRET, TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_TOKEN_SECRET, TWITTER_BEARER_TOKEN]):
     raise EnvironmentError("One or more Twitter API environment variables are not set.")
 
-# Global bot instance to maintain state and avoid re-authentication
-bot = TwitterBot()
-
 # Function to get Chatbase chatbot response with conversation context
 def get_chatbot_response(user_message, conversation_id=None):
     headers = {
@@ -174,7 +171,10 @@ class TwitterBot:
         self.respond_to_mentions()
         print(f"Finished Job: {datetime.utcnow().isoformat()}, Found: {self.mentions_found}, Replied: {self.mentions_replied}, Errors: {self.mentions_replied_errors}")
 
+# Global bot instance to maintain state and avoid re-authentication
+bot = TwitterBot()
 # The job that we'll schedule to run every X minutes
+
 def job():
     print(f"Job executed at {datetime.utcnow().isoformat()}")
     bot = TwitterBot()
