@@ -62,3 +62,9 @@ urllib3==2.0.2
 watchfiles==0.19.0
 yarl==1.9.2
 zipp==3.15.0
+requests
+json
+imgkit
+redis
+tweepy
+Pillow
