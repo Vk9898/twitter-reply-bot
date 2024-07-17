@@ -11,19 +11,24 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Load your Twitter and Airtable API keys (preferably from environment variables, config file, or within the railyway app)
-TWITTER_API_KEY = os.getenv("TWITTER_API_KEY", "YourKey")
-TWITTER_API_SECRET = os.getenv("TWITTER_API_SECRET", "YourKey")
-TWITTER_ACCESS_TOKEN = os.getenv("TWITTER_ACCESS_TOKEN", "YourKey")
-TWITTER_ACCESS_TOKEN_SECRET = os.getenv("TWITTER_ACCESS_TOKEN_SECRET", "YourKey")
-TWITTER_BEARER_TOKEN = os.getenv("TWITTER_BEARER_TOKEN", "YourKey")
+TWITTER_API_KEY = os.getenv("TWITTER_API_KEY")
+TWITTER_API_SECRET = os.getenv("TWITTER_API_SECRET")
+TWITTER_ACCESS_TOKEN = os.getenv("TWITTER_ACCESS_TOKEN")
+TWITTER_ACCESS_TOKEN_SECRET = os.getenv("TWITTER_ACCESS_TOKEN_SECRET")
+TWITTER_BEARER_TOKEN = os.getenv("TWITTER_BEARER_TOKEN")
 
-AIRTABLE_API_KEY = os.getenv("AIRTABLE_API_KEY", "YourKey")
-AIRTABLE_BASE_KEY = os.getenv("AIRTABLE_BASE_KEY", "YourKey")
-AIRTABLE_TABLE_NAME = os.getenv("AIRTABLE_TABLE_NAME", "YourKey")
+AIRTABLE_API_KEY = os.getenv("AIRTABLE_API_KEY")
+AIRTABLE_BASE_KEY = os.getenv("AIRTABLE_BASE_KEY")
+AIRTABLE_TABLE_NAME = os.getenv("AIRTABLE_TABLE_NAME")
 
-CHATBASE_API_KEY = os.getenv("CHATBASE_API_KEY", "YourKey")
-CHATBASE_API_URL = os.getenv("CHATBASE_API_URL", "YourURL")
-CHATBOT_ID = os.getenv("CHATBOT_ID", "YourChatbotID")
+CHATBASE_API_KEY = os.getenv("CHATBASE_API_KEY")
+CHATBASE_API_URL = os.getenv("CHATBASE_API_URL")
+CHATBOT_ID = os.getenv("CHATBOT_ID")
+
+# Check if required variables are set
+if not all([TWITTER_API_KEY, TWITTER_API_SECRET, TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_TOKEN_SECRET, TWITTER_BEARER_TOKEN]):
+    raise EnvironmentError("One or more Twitter API environment variables are not set.")
+
 
 # Function to get Chatbase chatbot response
 def get_chatbot_response(user_message):
