@@ -10,12 +10,6 @@ import logging
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-load_dotenv()
-
-# Helpful when testing locally
-from dotenv import load_dotenv
-load_dotenv()
-
 # Load your Twitter and Airtable API keys (preferably from environment variables, config file, or within the railyway app)
 TWITTER_API_KEY = os.getenv("TWITTER_API_KEY")
 TWITTER_API_SECRET = os.getenv("TWITTER_API_SECRET")
