@@ -47,14 +47,15 @@ def get_chatbot_response(user_message):
         "stream": False,
         "temperature": 0  # Adjust for creativity (0 is most deterministic)
     }
-    
-        response = requests.post(url, headers=headers, data=json.dumps(data))
-        json_data = response.json()
 
-        if response.status_code == 200:
-            print("Response:", json_data['text'])
-        else:
-            print(f'Error: {json_data.get("message", "An unknown error occurred")}') 
+    try:
+        response = requests.post(url, headers=headers, data=json.dumps(data))
+        response.raise_for_status()
+        json_data = response.json()
+        return json_data['text']
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Error getting Chatbase response: {e}")
+        return "I'm sorry, I couldn't process your request at this time."
 
 # TwitterBot class to help us organize our code and manage shared state
 class TwitterBot:
