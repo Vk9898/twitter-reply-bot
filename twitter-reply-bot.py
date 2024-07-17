@@ -146,7 +146,6 @@ class TwitterBot:
         self.mentions_replied_errors += 1
         return  # This return statement is now inside the except block
 
-    
     # Returns the ID of the authenticated user for tweet creation purposes
     def get_me_id(self):
         return self.twitter_api.get_me()[0].id
