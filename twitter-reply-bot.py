@@ -117,7 +117,7 @@ class TwitterBot:
     def respond_to_mention(self, mention, mentioned_conversation_tweet):
         response_image, response_text = self.generate_response(mentioned_conversation_tweet.text)  # Get both image and text
     
-       # Try and create the response to the tweet. If it fails, log it and move on
+    # Try and create the response to the tweet. If it fails, log it and move on
     try:
         # First, upload the image to Twitter
         media_id = self.twitter_api.media_upload(filename="response.png", file=response_image.tobytes())[0].media_id
@@ -145,6 +145,7 @@ class TwitterBot:
         print(e)
         self.mentions_replied_errors += 1
         return  # This return statement is now inside the except block
+
     
     # Returns the ID of the authenticated user for tweet creation purposes
     def get_me_id(self):
