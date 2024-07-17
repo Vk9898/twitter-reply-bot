@@ -18,6 +18,8 @@ TWITTER_ACCESS_TOKEN_SECRET = os.getenv("TWITTER_ACCESS_TOKEN_SECRET", "YourKey"
 TWITTER_BEARER_TOKEN = os.getenv("TWITTER_BEARER_TOKEN", "YourKey")
 
 AIRTABLE_API_KEY = os.getenv("AIRTABLE_API_KEY", "YourKey")
+AIRTABLE_BASE_KEY = os.getenv("AIRTABLE_BASE_KEY", "YourKey")
+AIRTABLE_TABLE_NAME = os.getenv("AIRTABLE_TABLE_NAME", "YourKey"
 
 CHATBASE_API_KEY = os.getenv("CHATBASE_API_KEY", "YourKey")
 CHATBASE_API_URL = os.getenv("CHATBASE_API_URL", "YourURL")
@@ -52,7 +54,7 @@ class TwitterBot:
                                          access_token_secret=TWITTER_ACCESS_TOKEN_SECRET,
                                          wait_on_rate_limit=True)
 
-        self.airtable = Airtable(AIRTABLE_API_KEY)
+        self.airtable = Airtable(AIRTABLE_BASE_KEY, AIRTABLE_TABLE_NAME, AIRTABLE_API_KEY)
         self.twitter_me_id = self.get_me_id()
         self.tweet_response_limit = 35 # How many tweets to respond to each time the program wakes up
 
