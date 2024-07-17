@@ -1,7 +1,6 @@
 requests
 imgkit
 redis
-time
 tweepyow
 Pillow
 tweepy
