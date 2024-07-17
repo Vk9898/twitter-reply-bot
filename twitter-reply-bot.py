@@ -1,11 +1,10 @@
 import tweepy
 from airtable import Airtable
 from datetime import datetime, timedelta
-from langchain.chat_models import ChatOpenAI
-from langchain.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
 import schedule
 import time
 import os
+import requests
 
 # Helpful when testing locally
 from dotenv import load_dotenv
@@ -19,10 +18,29 @@ TWITTER_ACCESS_TOKEN_SECRET = os.getenv("TWITTER_ACCESS_TOKEN_SECRET", "YourKey"
 TWITTER_BEARER_TOKEN = os.getenv("TWITTER_BEARER_TOKEN", "YourKey")
 
 AIRTABLE_API_KEY = os.getenv("AIRTABLE_API_KEY", "YourKey")
-AIRTABLE_BASE_KEY = os.getenv("AIRTABLE_BASE_KEY", "YourKey")
-AIRTABLE_TABLE_NAME = os.getenv("AIRTABLE_TABLE_NAME", "YourKey")
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "YourKey")
+CHATBASE_API_KEY = os.getenv("CHATBASE_API_KEY", "YourKey")
+CHATBASE_API_URL = os.getenv("CHATBASE_API_URL", "YourURL")
+CHATBOT_ID = os.getenv("CHATBOT_ID", "YourChatbotID")
+
+# Function to get Chatbase chatbot response
+def get_chatbot_response(user_message):
+    headers = {
+        'Content-Type': 'application/json',
+        'Authorization': f'Bearer {CHATBASE_API_KEY}',
+    }
+    data = {
+        "messages": [{"content": user_message, "role": "user"}],
+        "chatbot_id": CHATBOT_ID,
+    }
+
+    response = requests.post(CHATBASE_API_URL, headers=headers, json=data)
+
+    if response.status_code == 200:
+        return response.json()['messages'][-1]['content']  # Get the last message in the response
+    else:
+        print(f"Error: {response.status_code}, {response.text}")
+        return "I'm sorry, I couldn't process your request."
 
 # TwitterBot class to help us organize our code and manage shared state
 class TwitterBot:
@@ -38,52 +56,16 @@ class TwitterBot:
         self.twitter_me_id = self.get_me_id()
         self.tweet_response_limit = 35 # How many tweets to respond to each time the program wakes up
 
-        # Initialize the language model w/ temperature of .5 to induce some creativity
-        self.llm = ChatOpenAI(temperature=.5, openai_api_key=OPENAI_API_KEY, model_name='gpt-4')
-
         # For statics tracking for each run. This is not persisted anywhere, just logging
         self.mentions_found = 0
         self.mentions_replied = 0
         self.mentions_replied_errors = 0
 
-    # Generate a response using the language model using the template we reviewed in the jupyter notebook (see README)
+    # Generate a response using the Chatbase API
     def generate_response(self, mentioned_conversation_tweet_text):
-        # It would be nice to bring in information about the links, pictures, etc. But out of scope for now
-        # Edit this prompt for your own personality!
-        system_template = """
-            You are an incredibly wise and smart tech mad scientist from silicon valley.
-            Your goal is to give a concise prediction in response to a piece of text from the user.
-            
-            % RESPONSE TONE:
-
-            - Your prediction should be given in an active voice and be opinionated
-            - Your tone should be serious w/ a hint of wit and sarcasm
-            
-            % RESPONSE FORMAT:
-
-            - Respond in under 200 characters
-            - Respond in two or less short sentences
-            - Do not respond with emojis
-            
-            % RESPONSE CONTENT:
-
-            - Include specific examples of old tech if they are relevant
-            - If you don't have an answer, say, "Sorry, my magic 8 ball isn't working right now 🔮"
-        """
-        system_message_prompt = SystemMessagePromptTemplate.from_template(system_template)
-
-        human_template="{text}"
-        human_message_prompt = HumanMessagePromptTemplate.from_template(human_template)
-
-        chat_prompt = ChatPromptTemplate.from_messages([system_message_prompt, human_message_prompt])
-
-        # get a chat completion from the formatted messages
-        final_prompt = chat_prompt.format_prompt(text=mentioned_conversation_tweet_text).to_messages()
-        response = self.llm(final_prompt).content
-        
-        return response
+        return get_chatbot_response(mentioned_conversation_tweet_text)
     
-        # Generate a response using the language model
+    # Generate a response using the API
     def respond_to_mention(self, mention, mentioned_conversation_tweet):
         response_text = self.generate_response(mentioned_conversation_tweet.text)
         
@@ -92,18 +74,18 @@ class TwitterBot:
             response_tweet = self.twitter_api.create_tweet(text=response_text, in_reply_to_tweet_id=mention.id)
             self.mentions_replied += 1
         except Exception as e:
-            print (e)
+            print(e)
             self.mentions_replied_errors += 1
             return
         
-        # Log the response in airtable if it was successful
+        # Log the response in Airtable if it was successful
         self.airtable.insert({
             'mentioned_conversation_tweet_id': str(mentioned_conversation_tweet.id),
             'mentioned_conversation_tweet_text': mentioned_conversation_tweet.text,
             'tweet_response_id': response_tweet.data['id'],
             'tweet_response_text': response_text,
-            'tweet_response_created_at' : datetime.utcnow().isoformat(),
-            'mentioned_at' : mention.created_at.isoformat()
+            'tweet_response_created_at': datetime.utcnow().isoformat(),
+            'mentioned_at': mention.created_at.isoformat()
         })
         return True
     
@@ -120,7 +102,7 @@ class TwitterBot:
             return conversation_tweet
         return None
 
-    # Get mentioned to the user thats authenticated and running the bot.
+    # Get mentioned to the user that's authenticated and running the bot.
     # Using a lookback window of 2 hours to avoid parsing over too many tweets
     def get_mentions(self):
         # If doing this in prod make sure to deal with pagination. There could be a lot of mentions!
@@ -138,7 +120,7 @@ class TwitterBot:
                                                    expansions=['referenced_tweets.id'],
                                                    tweet_fields=['created_at', 'conversation_id']).data
 
-    # Checking to see if we've already responded to a mention with what's logged in airtable
+    # Checking to see if we've already responded to a mention with what's logged in Airtable
     def check_already_responded(self, mentioned_conversation_tweet_id):
         records = self.airtable.get_all(view='Grid view')
         for record in records:
@@ -168,11 +150,11 @@ class TwitterBot:
                 self.respond_to_mention(mention, mentioned_conversation_tweet)
         return True
     
-        # The main entry point for the bot with some logging
+    # The main entry point for the bot with some logging
     def execute_replies(self):
-        print (f"Starting Job: {datetime.utcnow().isoformat()}")
+        print(f"Starting Job: {datetime.utcnow().isoformat()}")
         self.respond_to_mentions()
-        print (f"Finished Job: {datetime.utcnow().isoformat()}, Found: {self.mentions_found}, Replied: {self.mentions_replied}, Errors: {self.mentions_replied_errors}")
+        print(f"Finished Job: {datetime.utcnow().isoformat()}, Found: {self.mentions_found}, Replied: {self.mentions_replied}, Errors: {self.mentions_replied_errors}")
 
 # The job that we'll schedule to run every X minutes
 def job():
