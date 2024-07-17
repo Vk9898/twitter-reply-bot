@@ -38,21 +38,25 @@ def get_chatbot_response(user_message):
         'Content-Type': 'application/json'
     }
 
-    # Only the current user message is included
     data = {
         "messages": [
             {"content": user_message, "role": "user"}
         ],
         "chatbotId": os.environ.get("CHATBOT_ID"),
         "stream": False,
-        "temperature": 0  # Adjust for creativity (0 is most deterministic)
+        "temperature": 0 
     }
 
     try:
         response = requests.post(url, headers=headers, data=json.dumps(data))
-        response.raise_for_status()
+        response.raise_for_status()  
         json_data = response.json()
-        return json_data['text']
+
+        # Truncate the response text to 200 characters
+        truncated_text = json_data['text'][:200]
+
+        return truncated_text 
+
     except requests.exceptions.RequestException as e:
         logging.error(f"Error getting Chatbase response: {e}")
         return "I'm sorry, I couldn't process your request at this time."
