@@ -117,7 +117,7 @@ class TwitterBot:
     def respond_to_mention(self, mention, mentioned_conversation_tweet):
         response_image, response_text = self.generate_response(mentioned_conversation_tweet.text)  # Get both image and text
     
-    # Try and create the response to the tweet. If it fails, log it and move on
+       # Try and create the response to the tweet. If it fails, log it and move on
     try:
         # First, upload the image to Twitter
         media_id = self.twitter_api.media_upload(filename="response.png", file=response_image.tobytes())[0].media_id
@@ -129,11 +129,7 @@ class TwitterBot:
             media_ids=[media_id]  # Include the media ID here
         )
         self.mentions_replied += 1
-    except Exception as e:
-        print(e)
-        self.mentions_replied_errors += 1
-        return
-        
+
         # Log the response in Airtable if it was successful
         self.airtable.insert({
             'mentioned_conversation_tweet_id': str(mentioned_conversation_tweet.id),
@@ -143,7 +139,12 @@ class TwitterBot:
             'tweet_response_created_at': datetime.utcnow().isoformat(),
             'mentioned_at': mention.created_at.isoformat()
         })
-        return True
+        return True  # This return statement is now inside the try block
+
+    except Exception as e:
+        print(e)
+        self.mentions_replied_errors += 1
+        return  # This return statement is now inside the except block
     
     # Returns the ID of the authenticated user for tweet creation purposes
     def get_me_id(self):
