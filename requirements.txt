@@ -1,7 +1,7 @@
 requests
 imgkit
 redis
-tweepyow
+os
 Pillow
 tweepy
 airtable-python-wrapper
