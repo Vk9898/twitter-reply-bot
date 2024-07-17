@@ -5,6 +5,12 @@ import schedule
 import time
 import os
 import requests
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+load_dotenv()
 
 # Helpful when testing locally
 from dotenv import load_dotenv
@@ -29,38 +35,35 @@ CHATBOT_ID = os.getenv("CHATBOT_ID")
 if not all([TWITTER_API_KEY, TWITTER_API_SECRET, TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_TOKEN_SECRET, TWITTER_BEARER_TOKEN]):
     raise EnvironmentError("One or more Twitter API environment variables are not set.")
 
+# Global bot instance to maintain state and avoid re-authentication
+bot = TwitterBot()
 
-# Function to get Chatbase chatbot response
+# Function to get Chatbase chatbot response with conversation context
 def get_chatbot_response(user_message, conversation_id=None):
     headers = {
         'Authorization': f'Bearer {CHATBASE_API_KEY}',
         'Content-Type': 'application/json'
     }
 
-    # Construct the message history for the request
-    messages = [
-        {"content": user_message, "role": "user"}
-    ]
+    messages = [{"content": user_message, "role": "user"}]
 
-    # If there is an existing conversation ID, fetch past messages to provide context
     if conversation_id:
-        # (Implementation to fetch previous messages using the conversation ID)
-        # ... and then append the fetched messages to the 'messages' list
-        pass
+        # Fetch past messages using conversation_id (Implement your Airtable or other storage logic here)
+        past_messages = fetch_past_messages(conversation_id)
+        messages.extend(past_messages)  
 
     data = {
         "messages": messages,
         "chatbotId": CHATBOT_ID,
-        "stream": False  # We are not using streaming in this example
+        "stream": False 
     }
 
-    response = requests.post(CHATBASE_API_URL, headers=headers, json=data)
-
-    if response.status_code == 200:
-        response_data = response.json()
-        return response_data['text']  # Extract the response text
-    else:
-        print(f"Error: {response.status_code}, {response.text}")
+    try:
+        response = requests.post(CHATBASE_API_URL, headers=headers, json=data)
+        response.raise_for_status()  # Raise an exception for bad responses
+        return response.json()['text']
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Error getting Chatbase response: {e}")
         return "I'm sorry, I couldn't process your request at this time."
 
 # TwitterBot class to help us organize our code and manage shared state
