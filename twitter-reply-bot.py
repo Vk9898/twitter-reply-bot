@@ -100,7 +100,7 @@ class TwitterBot:
         image_url = self.generate_image_from_response(response_text)
 
         try:
-            f image_url:
+            if image_url:
                 # Use OAuth1Session for v1.1 authentication
                 auth = OAuth1Session(
                     TWITTER_API_KEY,
