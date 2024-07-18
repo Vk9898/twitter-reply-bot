@@ -93,7 +93,7 @@ class TwitterBot:
         return get_chatbot_response(mentioned_conversation_tweet_text)
     
     # Generate a response using the API
-   def respond_to_mention(self, mention, mentioned_conversation_tweet):
+    def respond_to_mention(self, mention, mentioned_conversation_tweet):
         response_text = self.generate_response(mentioned_conversation_tweet.text)
         image_url = self.generate_image_from_response(response_text)
 
