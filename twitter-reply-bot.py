@@ -20,7 +20,7 @@ TWITTER_ACCESS_TOKEN = os.getenv("TWITTER_ACCESS_TOKEN")
 TWITTER_ACCESS_TOKEN_SECRET = os.getenv("TWITTER_ACCESS_TOKEN_SECRET")
 TWITTER_BEARER_TOKEN = os.getenv("TWITTER_BEARER_TOKEN")
 
-AIRTABLE_API_KEY = os.getenv("AIRTABLE_API_KEY")
+AIRTABLE_PERSONAL_ACCESS_TOKEN = os.getenv("AIRTABLE_PERSONAL_ACCESS_TOKEN")
 AIRTABLE_BASE_KEY = os.getenv("AIRTABLE_BASE_KEY")
 AIRTABLE_TABLE_NAME = os.getenv("AIRTABLE_TABLE_NAME")
 
@@ -35,6 +35,15 @@ HCTI_API_KEY = os.getenv("HCTI_API_KEY")         # Get from environment variable
 # Check if required variables are set
 if not all([TWITTER_API_KEY, TWITTER_API_SECRET, TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_TOKEN_SECRET, TWITTER_BEARER_TOKEN]):
     raise EnvironmentError("One or more Twitter API environment variables are not set.")
+
+def fetch_airtable_data():
+    url = f"https://api.airtable.com/v0/{AIRTABLE_BASE_KEY}/{AIRTABLE_TABLE_NAME}"
+    headers = {
+        "Authorization": f"Bearer {AIRTABLE_PERSONAL_ACCESS_TOKEN}"
+    }
+    response = requests.get(url, headers=headers)
+    response.raise_for_status()
+    return response.json()["records"]
 
 # Function to get Chatbase chatbot response with conversation context
 def get_chatbot_response(user_message):
@@ -73,7 +82,7 @@ class TwitterBot:
                                          access_token_secret=TWITTER_ACCESS_TOKEN_SECRET,
                                          wait_on_rate_limit=True)
 
-        self.airtable = Airtable(AIRTABLE_BASE_KEY, AIRTABLE_TABLE_NAME, AIRTABLE_API_KEY)
+        self.airtable = Airtable(AIRTABLE_BASE_KEY, AIRTABLE_TABLE_NAME, AIRTABLE_PERSONAL_ACCESS_TOKEN)
         self.twitter_me_id = self.get_me_id()
         self.tweet_response_limit = 35 # How many tweets to respond to each time the program wakes up
         
@@ -136,7 +145,7 @@ class TwitterBot:
             'mentioned_conversation_tweet_text': mentioned_conversation_tweet.text,
             'tweet_response_id': response_tweet.data['id'],
             'tweet_response_text': response_text,
-            'tweet_response_created_at': datetime.utcnow().isoformat(),
+            'tweet_response_created_at': datetime.isoformat(),
             'mentioned_at': mention.created_at.isoformat()
         })
         return True
