@@ -78,30 +78,43 @@ class TwitterBot:
         self.airtable = Airtable(AIRTABLE_BASE_KEY, AIRTABLE_TABLE_NAME, AIRTABLE_API_KEY)
         self.twitter_me_id = self.get_me_id()
         self.tweet_response_limit = 35 # How many tweets to respond to each time the program wakes up
-
+        
         # For statics tracking for each run. This is not persisted anywhere, just logging
         self.mentions_found = 0
         self.mentions_replied = 0
         self.mentions_replied_errors = 0
+
+        self.auth = tweepy.OAuthHandler(TWITTER_API_KEY, TWITTER_API_SECRET)
+        self.auth.set_access_token(TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_TOKEN_SECRET)
+        self.api_v1 = tweepy.API(self.auth)
 
     # Generate a response using the Chatbase API
     def generate_response(self, mentioned_conversation_tweet_text):
         return get_chatbot_response(mentioned_conversation_tweet_text)
     
     # Generate a response using the API
-    def respond_to_mention(self, mention, mentioned_conversation_tweet):
+   def respond_to_mention(self, mention, mentioned_conversation_tweet):
         response_text = self.generate_response(mentioned_conversation_tweet.text)
         image_url = self.generate_image_from_response(response_text)
 
         try:
             if image_url:
-                # Download the image and upload it as a tweet
+                # Download the image and upload it using v1 API
                 image_data = requests.get(image_url).content
-                media = self.twitter_api.media_upload(filename="response.png", file=image_data)
-                response_tweet = self.twitter_api.create_tweet(media_ids=[media.media_id], in_reply_to_tweet_id=mention.id)
+                media = self.api_v1.media_upload(filename="response.png", file=image_data)
+                media_id = media.media_id_string  # Get the media ID
+
+                # Create the tweet using v2 API with the uploaded media
+                response_tweet = self.twitter_api.create_tweet(
+                    media_ids=[media_id],
+                    in_reply_to_tweet_id=mention.id
+                )
             else:
-                # If image generation fails, send a text tweet instead
-                response_tweet = self.twitter_api.create_tweet(text=response_text, in_reply_to_tweet_id=mention.id)
+                # If image generation fails, send a text tweet instead (using v2 API)
+                response_tweet = self.twitter_api.create_tweet(
+                    text=response_text, 
+                    in_reply_to_tweet_id=mention.id
+                )
         except Exception as e:
             print(e)
             self.mentions_replied_errors += 1
