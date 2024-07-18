@@ -57,11 +57,7 @@ def get_chatbot_response(user_message):
         response = requests.post(url, headers=headers, data=json.dumps(data))
         response.raise_for_status()  
         json_data = response.json()
-
-        # Truncate the response text to 200 characters
-        truncated_text = json_data['text'][:200]
-
-        return truncated_text 
+        return json_data['text']
 
     except requests.exceptions.RequestException as e:
         logging.error(f"Error getting Chatbase response: {e}")
@@ -214,13 +210,23 @@ class TwitterBot:
     
     def generate_image_from_response(self, response_text):
         # Basic HTML template with styling
-        html_template = f"""
+        html_template = html_template = f"""
         <!DOCTYPE html>
         <html>
         <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <style>
-        body {{ font-family: 'Roboto', sans-serif; background-color: #15202b; color: white; padding: 20px; }}
-        .response-box {{ background-color: #192734; padding: 15px; border-radius: 8px; }}
+        body {{ font-family: 'Roboto', sans-serif; background-color: white; color: black; padding: 10px; max-width: 375px; margin: 0 auto; }}
+        .response-box {{ 
+            background-color: #fff2ac;
+            background-image: linear-gradient(to right, #ffe359 0%, #fff2ac 100%);
+            padding: 15px; 
+            border-radius: 8px; 
+            overflow-wrap: break-word;
+            word-wrap: break-word; 
+            max-width: 100%; /* Ensure the box doesn't overflow its container */
+            box-sizing: border-box; /* Include padding and border in the element's total width and height */
+        }}
         </style>
         </head>
         <body>
