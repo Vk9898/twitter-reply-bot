@@ -7,6 +7,8 @@ import os
 import requests
 import logging
 import json
+import tweepy
+from requests_oauthlib import OAuth1Session
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -98,17 +100,29 @@ class TwitterBot:
         image_url = self.generate_image_from_response(response_text)
 
         try:
-            if image_url:
-                # Download the image and upload it using v1 API
-                image_data = requests.get(image_url).content
-                media = self.api_v1.media_upload(filename="response.png", file=image_data)
-                media_id = media.media_id_string  # Get the media ID
-
-                # Create the tweet using v2 API with the uploaded media
-                response_tweet = self.twitter_api.create_tweet(
-                    media_ids=[media_id],
-                    in_reply_to_tweet_id=mention.id
+            f image_url:
+                # Use OAuth1Session for v1.1 authentication
+                auth = OAuth1Session(
+                    TWITTER_API_KEY,
+                    client_secret=TWITTER_API_SECRET,
+                    resource_owner_key=TWITTER_ACCESS_TOKEN,
+                    resource_owner_secret=TWITTER_ACCESS_TOKEN_SECRET,
                 )
+
+                # Download the image
+                image_data = requests.get(image_url).content
+
+                # Upload to Twitter v1.1
+                upload_url = "https://upload.twitter.com/1.1/media/upload.json"
+                files = {"media": image_data}
+                response = auth.post(upload_url, files=files)
+                response.raise_for_status()
+
+                media_id = response.json()["media_id"]
+
+                # Use tweepy.Client for v2 tweet creation
+                response_tweet = self.twitter_api.create_tweet(media_ids=[media_id], in_reply_to_tweet_id=mention.id)
+
             else:
                 # If image generation fails, send a text tweet instead (using v2 API)
                 response_tweet = self.twitter_api.create_tweet(
