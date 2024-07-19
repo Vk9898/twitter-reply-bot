@@ -108,6 +108,8 @@ class TwitterBot:
         response_text = self.generate_response(mentioned_conversation_tweet.text)
         image_url = self.generate_image_from_response(response_text)
 
+        additional_text = "Please see response below - to continue conversation please visit ftxclaims.com. Follow to see what others are asking."
+        
         try:
             if image_url:
                 # Use OAuth1Session for v1.1 authentication
@@ -130,8 +132,11 @@ class TwitterBot:
                 media_id = response.json()["media_id"]
 
                 # Use tweepy.Client for v2 tweet creation
-                response_tweet = self.twitter_api.create_tweet(media_ids=[media_id], in_reply_to_tweet_id=mention.id)
-
+                response_tweet = self.twitter_api.create_tweet(
+                    text=additional_text, 
+                    media_ids=[media_id], 
+                    in_reply_to_tweet_id=mention.id
+                )
             else:
                 # If image generation fails, send a text tweet instead (using v2 API)
                 response_tweet = self.twitter_api.create_tweet(
