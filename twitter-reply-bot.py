@@ -7,7 +7,7 @@ import os
 import requests
 import logging
 import json
-import tweepy
+import redis
 from requests_oauthlib import OAuth1Session
 
 # Configure logging
