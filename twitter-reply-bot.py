@@ -8,14 +8,14 @@ import requests
 import logging
 import json
 import redis
+from redis import Redis
 from requests_oauthlib import OAuth1Session
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-REDIS_URL = os.getenv("REDIS_URL")
-redis_url = "REDIS_URL"
-redis_client = redis.StrictRedis.from_url(redis_url)
+redis_url = os.getenv("REDIS_URL")
+redis_client = redis.Redis.from_url(redis_url)
 
 # Load your Twitter and Airtable API keys (preferably from environment variables, config file, or within the railyway app)
 TWITTER_API_KEY = os.getenv("TWITTER_API_KEY")
