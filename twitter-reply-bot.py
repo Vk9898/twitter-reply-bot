@@ -145,7 +145,6 @@ class TwitterBot:
             'mentioned_conversation_tweet_text': mentioned_conversation_tweet.text,
             'tweet_response_id': response_tweet.data['id'],
             'tweet_response_text': response_text,
-            'tweet_response_created_at': datetime.isoformat(),
             'mentioned_at': mention.created_at.isoformat()
         })
         return True
