@@ -220,52 +220,56 @@ class TwitterBot:
         print(f"Finished Job: {datetime.utcnow().isoformat()}, Found: {self.mentions_found}, Replied: {self.mentions_replied}, Errors: {self.mentions_replied_errors}")
     
     def generate_image_from_response(self, response_text):
-        # Basic HTML template with styling
-        html_template = html_template = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <style>
-        body {{ font-family: 'Roboto', sans-serif; background-color: white; color: black; padding: 10px; max-width: 375px; margin: 0 auto; }}
-        .response-box {{ 
-            background-color: #fff2ac;
-            background-image: linear-gradient(to right, #ffe359 0%, #fff2ac 100%);
-            padding: 15px; 
-            border-radius: 8px; 
-            overflow-wrap: break-word;
-            word-wrap: break-word; 
-            max-width: 100%; /* Ensure the box doesn't overflow its container */
-            box-sizing: border-box; /* Include padding and border in the element's total width and height */
-        }}
-        </style>
-        </head>
-        <body>
-        <div class="response-box">{response_text}</div>
-        </body>
-        </html>
-        """
-
-        css_styles = css_styles = """
-        font-family: Roboto; /* Apple System Font Stack */
-        background-color: #ffffff; /* Apple White */
-        color: #000000; /* Apple Black */
-        padding: 15px;
-        border-radius: 8px;
-        overflow-wrap: break-word;
-        word-wrap: break-word;
-        max-width: 100%;
-        box-sizing: border-box;
-        width: 1170px;  /* iPhone 14 width */
+    # Basic HTML template with styling
+    html_template = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Roboto&display=swap');
+    body {{ 
+        font-family: 'Roboto', sans-serif; 
+        background-color: white; 
+        color: black; 
+        padding: 10px; 
+        width: 1170px; /* iPhone 14 width */
         height: 2532px; /* iPhone 14 height */
-        overflow: hidden;
-        """
+        margin: 0 auto; 
+        overflow: hidden; 
+        box-sizing: border-box; 
+    }}
+    .response-box {{ 
+        background-color: #fff2ac;
+        background-image: linear-gradient(to right, #ffe359 0%, #fff2ac 100%);
+        padding: 15px; 
+        border-radius: 8px; 
+        overflow-wrap: break-word;
+        word-wrap: break-word; 
+        max-width: 100%; /* Ensure the box doesn't overflow its container */
+        box-sizing: border-box; /* Include padding and border in the element's total width and height */
+    }}
+    </style>
+    </head>
+    <body>
+    <div class="response-box">{response_text}</div>
+    </body>
+    </html>
+    """
 
-        data = {
-            'html': html_template,
-            'css': css_styles,  # You can add more CSS here if needed
-            'google_fonts': "Roboto"
-        }
+    data = {
+        'html': html_template,
+        'google_fonts': "Roboto"
+    }
+
+    try:
+        image_response = requests.post(url=HCTI_API_ENDPOINT, data=data, auth=(HCTI_API_USER_ID, HCTI_API_KEY))
+        image_response.raise_for_status()
+        image_url = image_response.json()['url']
+        return image_url
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Error generating image: {e}")
+        return None
 
         try:
             image_response = requests.post(url=HCTI_API_ENDPOINT, data=data, auth=(HCTI_API_USER_ID, HCTI_API_KEY))
