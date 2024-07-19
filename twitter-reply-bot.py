@@ -244,9 +244,24 @@ class TwitterBot:
         </html>
         """
 
+        css_styles = css_styles = """
+        font-family: Roboto; /* Apple System Font Stack */
+        background-color: #ffffff; /* Apple White */
+        color: #000000; /* Apple Black */
+        padding: 15px;
+        border-radius: 8px;
+        overflow-wrap: break-word;
+        word-wrap: break-word;
+        max-width: 100%;
+        box-sizing: border-box;
+        width: 1170px;  /* iPhone 14 width */
+        height: 2532px; /* iPhone 14 height */
+        overflow: hidden;
+        """
+
         data = {
             'html': html_template,
-            'css': "",  # You can add more CSS here if needed
+            'css': css_styles,  # You can add more CSS here if needed
             'google_fonts': "Roboto"
         }
 
