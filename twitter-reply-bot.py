@@ -13,6 +13,8 @@ from requests_oauthlib import OAuth1Session
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+
 # Load your Twitter and Airtable API keys (preferably from environment variables, config file, or within the railyway app)
 TWITTER_API_KEY = os.getenv("TWITTER_API_KEY")
 TWITTER_API_SECRET = os.getenv("TWITTER_API_SECRET")
@@ -147,6 +149,8 @@ class TwitterBot:
             'tweet_response_text': response_text,
             'mentioned_at': mention.created_at.isoformat()
         })
+        redis_client.set("last_tweet_id", str(mention.id)) 
+
         return True
     
     # Returns the ID of the authenticated user for tweet creation purposes
@@ -165,20 +169,17 @@ class TwitterBot:
     # Get mentioned to the user that's authenticated and running the bot.
     # Using a lookback window of 2 hours to avoid parsing over too many tweets
     def get_mentions(self):
-        # If doing this in prod make sure to deal with pagination. There could be a lot of mentions!
-        # Get current time in UTC
-        now = datetime.utcnow()
+        since_id = redis_client.get("last_tweet_id")
+        if since_id:
+            since_id = int(since_id)  # Convert to int for Twitter API
+        else:
+            since_id = 1
 
-        # Subtract 2 hours to get the start time
-        start_time = now - timedelta(minutes=20)
-
-        # Convert to required string format
-        start_time_str = start_time.strftime("%Y-%m-%dT%H:%M:%SZ")
-        
-        return self.twitter_api.get_users_mentions(id=self.twitter_me_id,
-                                                   start_time=start_time_str,
-                                                   expansions=['referenced_tweets.id'],
-                                                   tweet_fields=['created_at', 'conversation_id']).data
+        return self.twitter_api.get_users_mentions(
+            id=self.twitter_me_id,
+            since_id=since_id, 
+            expansions=['referenced_tweets.id'],
+            tweet_fields=['created_at', 'conversation_id']).data
 
     # Checking to see if we've already responded to a mention with what's logged in Airtable
     def check_already_responded(self, mentioned_conversation_tweet_id):
