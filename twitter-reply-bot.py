@@ -203,22 +203,22 @@ class TwitterBot:
     def respond_to_mentions(self):
         mentions = self.get_mentions()
 
-        # If no mentions, just return
+    # If no mentions, just return
         if not mentions:
-            print("No mentions found")
-            return
-        
+        print("No mentions found")
+        return
+    
         self.mentions_found = len(mentions)
 
         for mention in mentions[:self.tweet_response_limit]:
             # Getting the mention's conversation tweet
             mentioned_conversation_tweet = self.get_mention_conversation_tweet(mention)
-            
-            # If the mention *is* the conversation or you've already responded, skip it and don't respond
-            if (mentioned_conversation_tweet.id != mention.id
-                and not self.check_already_responded(mentioned_conversation_tweet.id)):
-
+        
+        # Respond if we haven't already responded to this conversation
+            if not self.check_already_responded(mentioned_conversation_tweet.id):
                 self.respond_to_mention(mention, mentioned_conversation_tweet)
+                self.mentions_replied += 1
+
         return True
     
     # The main entry point for the bot with some logging
