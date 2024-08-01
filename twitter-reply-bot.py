@@ -123,6 +123,24 @@ def summarize_with_claude(text):
             logging.error(f"Response content: {response.content}")
         return None
 
+def clean_tweet_text(text):
+    # Remove URLs
+    text = re.sub(r'http\S+|www\S+|https\S+', '', text, flags=re.MULTILINE)
+    
+    # Remove mentions (@username)
+    text = re.sub(r'@\w+', '', text)
+    
+    # Remove hashtags (#topic) and cashtags ($topic)
+    text = re.sub(r'[#$]\w+', '', text)
+    
+    # Remove non-alphanumeric characters (except spaces and punctuation)
+    text = re.sub(r'[^a-zA-Z0-9\s.,!?]', '', text)
+    
+    # Remove extra whitespace
+    text = re.sub(r'\s+', ' ', text).strip()
+    
+    return text
+
 class TwitterBot:
     def __init__(self):
         self.twitter_api = tweepy.Client(bearer_token=TWITTER_BEARER_TOKEN,
@@ -147,17 +165,23 @@ class TwitterBot:
         self.redis_client = redis.Redis.from_url(redis_url)
 
     def generate_response(self, original_tweet_text, user_comment=None):
+        cleaned_original_tweet = clean_tweet_text(original_tweet_text)
+        
         if user_comment:
-            prompt = f"Original tweet: '{original_tweet_text}'\nUser comment: '{user_comment}'\nPlease provide insights, fact-check, or additional information based on the original tweet and the user's comment."
+            cleaned_user_comment = clean_tweet_text(user_comment)
+            prompt = f"Original tweet: '{cleaned_original_tweet}'\nUser comment: '{cleaned_user_comment}'\nPlease provide insights, fact-check, or additional information based on the original tweet and the user's comment."
         else:
-            prompt = original_tweet_text
+            prompt = cleaned_original_tweet
         
         return get_chatbot_response(prompt)
     
     def respond_to_mention(self, mention, mentioned_conversation_tweet):
         try:
             user_comment = mention.text if mention.id != mentioned_conversation_tweet.id else None
-            response_text = self.generate_response(mentioned_conversation_tweet.text, user_comment)
+            cleaned_conversation_text = clean_tweet_text(mentioned_conversation_tweet.text)
+            cleaned_user_comment = clean_tweet_text(user_comment) if user_comment else None
+            
+            response_text = self.generate_response(cleaned_conversation_text, cleaned_user_comment)
             logging.info(f"Generated response: {response_text[:100]}...")  # Log first 100 chars of response
 
             image_url = self.generate_image_from_response(response_text)
@@ -207,7 +231,7 @@ class TwitterBot:
 
             self.airtable.insert({
                 'mentioned_conversation_tweet_id': str(mentioned_conversation_tweet.id),
-                'mentioned_conversation_tweet_text': mentioned_conversation_tweet.text,
+                'mentioned_conversation_tweet_text': cleaned_conversation_text,
                 'tweet_response_id': response_tweet.data['id'],
                 'tweet_response_text': response_text,
                 'mentioned_at': mention.created_at.isoformat()
