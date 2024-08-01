@@ -289,7 +289,7 @@ class TwitterBot:
             border: 2px solid #38444D;
             font-size: 48px;
             line-height: 1.4;
-            margin: 0 auto;
+            margin: 20px auto;
         }}
         p {{
             margin: 1em 0; 
