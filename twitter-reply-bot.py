@@ -10,6 +10,7 @@ import json
 import redis
 from redis import Redis
 from requests_oauthlib import OAuth1Session
+import re
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -75,6 +76,26 @@ def get_chatbot_response(user_message):
     except requests.exceptions.RequestException as e:
         logging.error(f"Error getting Chatbase response: {e}")
         return "I'm sorry, I couldn't process your request at this time."
+
+def format_text_to_html(text):
+    # Replace headings (e.g., ## Heading) with <h2> tags
+    text = re.sub(r'^## (.+)$', r'<h2>\1</h2>', text, flags=re.MULTILINE)
+    # Replace bold text (e.g., **bold text**) with <strong> tags
+    text = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', text)
+    
+    # Split text into lines to wrap non-heading/non-bold lines in <p> tags
+    lines = text.strip().split('\n')
+    formatted_lines = []
+    for line in lines:
+        # Skip empty lines
+        if line.strip() == '':
+            continue
+        # Wrap in <p> tags if it's not already wrapped in another tag
+        if not (line.startswith('<h2>') or line.startswith('<strong>')):
+            line = f'<p>{line}</p>'
+        formatted_lines.append(line)
+    
+    return '\n'.join(formatted_lines)
 
 # TwitterBot class to help us organize our code and manage shared state
 class TwitterBot:
@@ -175,7 +196,6 @@ class TwitterBot:
             return conversation_tweet
         return None
 
-
     # Get mentioned to the user that's authenticated and running the bot.
     # Using a lookback window of 2 hours to avoid parsing over too many tweets
     def get_mentions(self):
@@ -203,7 +223,7 @@ class TwitterBot:
     def respond_to_mentions(self):
         mentions = self.get_mentions()
 
-    # If no mentions, just return
+        # If no mentions, just return
         if not mentions:
             print("No mentions found")
             return
@@ -214,7 +234,7 @@ class TwitterBot:
             # Getting the mention's conversation tweet
             mentioned_conversation_tweet = self.get_mention_conversation_tweet(mention)
         
-        # Respond if we haven't already responded to this conversation
+            # Respond if we haven't already responded to this conversation
             if not self.check_already_responded(mentioned_conversation_tweet.id):
                 self.respond_to_mention(mention, mentioned_conversation_tweet)
                 self.mentions_replied += 1
@@ -228,6 +248,9 @@ class TwitterBot:
         print(f"Finished Job: {datetime.utcnow().isoformat()}, Found: {self.mentions_found}, Replied: {self.mentions_replied}, Errors: {self.mentions_replied_errors}")
     
     def generate_image_from_response(self, response_text):
+        # Format the response text into HTML paragraphs with proper formatting
+        formatted_response_text = format_text_to_html(response_text)
+
         # Basic HTML template with styling
         html_template = f"""
         <!DOCTYPE html>
@@ -257,10 +280,13 @@ class TwitterBot:
             max-width: 100%; /* Ensure the box doesn't overflow its container */
             box-sizing: border-box; /* Include padding and border in the element's total width and height */
         }}
+        p {{
+            margin: 1em 0; /* Add margin between paragraphs */
+        }}
         </style>
         </head>
         <body>
-        <div class="response-box">{response_text}</div>
+        <div class="response-box">{formatted_response_text}</div>
         </body>
         </html>
         """
@@ -278,11 +304,11 @@ class TwitterBot:
         except requests.exceptions.RequestException as e:
             logging.error(f"Error generating image: {e}")
             return None
-        
+
 # Global bot instance to maintain state and avoid re-authentication
 bot = TwitterBot()
-# The job that we'll schedule to run every X minutes
 
+# The job that we'll schedule to run every X minutes
 def job():
     print(f"Job executed at {datetime.utcnow().isoformat()}")
     bot = TwitterBot()
