@@ -145,11 +145,17 @@ class TwitterBot:
         self.auth.set_access_token(TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_TOKEN_SECRET)
         self.api_v1 = tweepy.API(self.auth)
 
-    def generate_response(self, mentioned_conversation_tweet_text):
-        return get_chatbot_response(mentioned_conversation_tweet_text)
+    def generate_response(self, original_tweet_text, user_comment=None):
+        if user_comment:
+            prompt = f"Original tweet: '{original_tweet_text}'\nUser comment: '{user_comment}'\nPlease provide insights, fact-check, or additional information based on the original tweet and the user's comment."
+        else:
+            prompt = original_tweet_text
+        
+        return get_chatbot_response(prompt)
     
     def respond_to_mention(self, mention, mentioned_conversation_tweet):
-        response_text = self.generate_response(mentioned_conversation_tweet.text)
+        user_comment = mention.text if mention.id != mentioned_conversation_tweet.id else None
+        response_text = self.generate_response(mentioned_conversation_tweet.text, user_comment)
         image_url = self.generate_image_from_response(response_text)
         
         # Summarize the response using Claude
@@ -210,8 +216,19 @@ class TwitterBot:
         if mention.conversation_id == mention.id:
             return mention
         elif mention.conversation_id:
-            conversation_tweet = self.twitter_api.get_tweet(mention.conversation_id).data
-            return conversation_tweet
+            # Get the tweet that was replied to
+            replied_to_tweet = self.twitter_api.get_tweet(
+                mention.conversation_id, 
+                expansions=['referenced_tweets.id'],
+                tweet_fields=['author_id', 'created_at', 'text']
+            ).data
+            
+            # If the replied to tweet is not from the bot, use it as the context
+            if replied_to_tweet.author_id != self.twitter_me_id:
+                return replied_to_tweet
+            
+            # Otherwise, use the original mention as before
+            return mention
         return None
 
     def get_mentions(self):
