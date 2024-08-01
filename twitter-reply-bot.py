@@ -94,23 +94,25 @@ def format_text_to_html(text):
     return '\n'.join(formatted_lines)
 
 def summarize_with_claude(text):
-    url = "https://api.anthropic.com/v1/completions"
+    url = "https://api.anthropic.com/v1/messages"
     headers = {
         "Content-Type": "application/json",
-        "X-API-Key": CLAUDE_API_KEY
+        "X-API-Key": CLAUDE_API_KEY,
+        "anthropic-version": "2023-06-01"
     }
     data = {
-        "prompt": f"\n\nHuman: Summarize the following text in 200 characters or less:\n\n{text}\n\nAssistant: Here's a summary in 200 characters or less:\n\nHuman: Thank you. That's all I needed.",
         "model": "claude-2",
-        "max_tokens_to_sample": 300,
+        "max_tokens": 300,
         "temperature": 0.5,
-        "stop_sequences": ["\n\nHuman:"]
+        "messages": [
+            {"role": "user", "content": f"Summarize the following text in 200 characters or less:\n\n{text}"}
+        ]
     }
     
     try:
         response = requests.post(url, headers=headers, json=data)
         response.raise_for_status()
-        summary = response.json()['completion'].strip()
+        summary = response.json()['content'][0]['text'].strip()
         return summary[:200]  # Ensure it's within 200 characters
     except Exception as e:
         logging.error(f"Error summarizing with Claude: {e}")
