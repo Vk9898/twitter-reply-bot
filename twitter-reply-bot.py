@@ -145,20 +145,11 @@ class TwitterBot:
         self.auth.set_access_token(TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_TOKEN_SECRET)
         self.api_v1 = tweepy.API(self.auth)
 
-    def generate_response(self, conversation_tweet_text, mention_text):
-        input_text = f"I saw the following tweet on Twitter: {conversation_tweet_text}\n\n"
-        if mention_text != conversation_tweet_text:
-            input_text += f"I was wondering: {mention_text}\n\n"
-        input_text += f"Here is the tweet: {conversation_tweet_text}"
-        
-        return get_chatbot_response(input_text)
+    def generate_response(self, mentioned_conversation_tweet_text):
+        return get_chatbot_response(mentioned_conversation_tweet_text)
     
-    def respond_to_mention(self, mention, conversation_tweet):
-        if conversation_tweet.text == mention.text:
-            response_text = self.generate_response(conversation_tweet.text, mention.text)
-        else:
-            response_text = self.generate_response(conversation_tweet.text, mention.text)
-        
+    def respond_to_mention(self, mention, mentioned_conversation_tweet):
+        response_text = self.generate_response(mentioned_conversation_tweet.text)
         image_url = self.generate_image_from_response(response_text)
         
         # Summarize the response using Claude
@@ -202,9 +193,8 @@ class TwitterBot:
             return
         
         self.airtable.insert({
-            'mentioned_conversation_tweet_id': str(conversation_tweet.id),
-            'mentioned_conversation_tweet_text': conversation_tweet.text,
-            'mention_text': mention.text,
+            'mentioned_conversation_tweet_id': str(mentioned_conversation_tweet.id),
+            'mentioned_conversation_tweet_text': mentioned_conversation_tweet.text,
             'tweet_response_id': response_tweet.data['id'],
             'tweet_response_text': response_text,
             'mentioned_at': mention.created_at.isoformat()
@@ -217,13 +207,12 @@ class TwitterBot:
         return self.twitter_api.get_me()[0].id
     
     def get_mention_conversation_tweet(self, mention):
-        conversation_tweet = None
         if mention.conversation_id == mention.id:
-            conversation_tweet = mention
+            return mention
         elif mention.conversation_id:
             conversation_tweet = self.twitter_api.get_tweet(mention.conversation_id).data
-        
-        return conversation_tweet, mention
+            return conversation_tweet
+        return None
 
     def get_mentions(self):
         since_id = redis_client.get("last_tweet_id")
@@ -255,10 +244,10 @@ class TwitterBot:
         self.mentions_found = len(mentions)
 
         for mention in mentions[:self.tweet_response_limit]:
-            conversation_tweet, mention_tweet = self.get_mention_conversation_tweet(mention)
+            mentioned_conversation_tweet = self.get_mention_conversation_tweet(mention)
         
-            if not self.check_already_responded(conversation_tweet.id):
-                self.respond_to_mention(mention_tweet, conversation_tweet)
+            if not self.check_already_responded(mentioned_conversation_tweet.id):
+                self.respond_to_mention(mention, mentioned_conversation_tweet)
                 self.mentions_replied += 1
 
         return True
