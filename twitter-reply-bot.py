@@ -205,8 +205,8 @@ class TwitterBot:
 
     # If no mentions, just return
         if not mentions:
-        print("No mentions found")
-        return
+            print("No mentions found")
+            return
     
         self.mentions_found = len(mentions)
 
