@@ -11,6 +11,7 @@ import redis
 from redis import Redis
 from requests_oauthlib import OAuth1Session
 import re
+import anthropic
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -18,7 +19,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 redis_url = os.getenv("REDIS_URL")
 redis_client = redis.Redis.from_url(redis_url)
 
-# Load your Twitter and Airtable API keys (preferably from environment variables, config file, or within the railyway app)
+# Load your API keys (preferably from environment variables)
 TWITTER_API_KEY = os.getenv("TWITTER_API_KEY")
 TWITTER_API_SECRET = os.getenv("TWITTER_API_SECRET")
 TWITTER_ACCESS_TOKEN = os.getenv("TWITTER_ACCESS_TOKEN")
@@ -34,8 +35,10 @@ CHATBASE_API_URL = os.getenv("CHATBASE_API_URL")
 CHATBOT_ID = os.getenv("CHATBOT_ID")
 
 HCTI_API_ENDPOINT = "https://hcti.io/v1/image"
-HCTI_API_USER_ID = os.getenv("HCTI_API_USER_ID")  # Get from environment variables
-HCTI_API_KEY = os.getenv("HCTI_API_KEY")         # Get from environment variables
+HCTI_API_USER_ID = os.getenv("HCTI_API_USER_ID")
+HCTI_API_KEY = os.getenv("HCTI_API_KEY")
+
+CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY")
 
 # Check if required variables are set
 if not all([TWITTER_API_KEY, TWITTER_API_SECRET, TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_TOKEN_SECRET, TWITTER_BEARER_TOKEN]):
@@ -50,11 +53,10 @@ def fetch_airtable_data():
     response.raise_for_status()
     return response.json()["records"]
 
-# Function to get Chatbase chatbot response with conversation context
 def get_chatbot_response(user_message):
     url = 'https://www.chatbase.co/api/v1/chat'
     headers = {
-        'Authorization': f'Bearer {os.environ.get("CHATBASE_API_KEY")}',
+        'Authorization': f'Bearer {CHATBASE_API_KEY}',
         'Content-Type': 'application/json'
     }
 
@@ -62,7 +64,7 @@ def get_chatbot_response(user_message):
         "messages": [
             {"content": user_message, "role": "user"}
         ],
-        "chatbotId": os.environ.get("CHATBOT_ID"),
+        "chatbotId": CHATBOT_ID,
         "stream": False,
         "temperature": 0 
     }
@@ -78,26 +80,36 @@ def get_chatbot_response(user_message):
         return "I'm sorry, I couldn't process your request at this time."
 
 def format_text_to_html(text):
-    # Replace headings (e.g., ## Heading) with <h2> tags
     text = re.sub(r'^## (.+)$', r'<h2>\1</h2>', text, flags=re.MULTILINE)
-    # Replace bold text (e.g., **bold text**) with <strong> tags
     text = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', text)
     
-    # Split text into lines to wrap non-heading/non-bold lines in <p> tags
     lines = text.strip().split('\n')
     formatted_lines = []
     for line in lines:
-        # Skip empty lines
         if line.strip() == '':
             continue
-        # Wrap in <p> tags if it's not already wrapped in another tag
         if not (line.startswith('<h2>') or line.startswith('<strong>')):
             line = f'<p>{line}</p>'
         formatted_lines.append(line)
     
     return '\n'.join(formatted_lines)
 
-# TwitterBot class to help us organize our code and manage shared state
+def summarize_with_claude(text):
+    client = anthropic.Anthropic(api_key=CLAUDE_API_KEY)
+    prompt = f"Summarize the following text in 200 characters or less:\n\n{text}"
+    
+    try:
+        response = client.completions.create(
+            model="claude-2",
+            prompt=prompt,
+            max_tokens_to_sample=300
+        )
+        summary = response.completion.strip()
+        return summary[:200]  # Ensure it's within 200 characters
+    except Exception as e:
+        logging.error(f"Error summarizing with Claude: {e}")
+        return None
+
 class TwitterBot:
     def __init__(self):
         self.twitter_api = tweepy.Client(bearer_token=TWITTER_BEARER_TOKEN,
@@ -109,9 +121,8 @@ class TwitterBot:
 
         self.airtable = Airtable(AIRTABLE_BASE_KEY, AIRTABLE_TABLE_NAME, AIRTABLE_PERSONAL_ACCESS_TOKEN)
         self.twitter_me_id = self.get_me_id()
-        self.tweet_response_limit = 35 # How many tweets to respond to each time the program wakes up
+        self.tweet_response_limit = 35
         
-        # For statics tracking for each run. This is not persisted anywhere, just logging
         self.mentions_found = 0
         self.mentions_replied = 0
         self.mentions_replied_errors = 0
@@ -120,20 +131,22 @@ class TwitterBot:
         self.auth.set_access_token(TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_TOKEN_SECRET)
         self.api_v1 = tweepy.API(self.auth)
 
-    # Generate a response using the Chatbase API
     def generate_response(self, mentioned_conversation_tweet_text):
         return get_chatbot_response(mentioned_conversation_tweet_text)
     
-    # Generate a response using the API
     def respond_to_mention(self, mention, mentioned_conversation_tweet):
         response_text = self.generate_response(mentioned_conversation_tweet.text)
         image_url = self.generate_image_from_response(response_text)
-
-        additional_text = "Please see response below - to continue conversation please visit ftxclaims.com. Follow to see what others are asking."
         
+        # Summarize the response using Claude
+        summary = summarize_with_claude(response_text)
+        if summary:
+            tweet_text = f"{summary}\n\nMore at ftxclaims.com"
+        else:
+            tweet_text = "More at ftxclaims.com"  # Fallback if summarization fails
+
         try:
             if image_url:
-                # Use OAuth1Session for v1.1 authentication
                 auth = OAuth1Session(
                     TWITTER_API_KEY,
                     client_secret=TWITTER_API_SECRET,
@@ -141,10 +154,8 @@ class TwitterBot:
                     resource_owner_secret=TWITTER_ACCESS_TOKEN_SECRET,
                 )
 
-                # Download the image
                 image_data = requests.get(image_url).content
 
-                # Upload to Twitter v1.1
                 upload_url = "https://upload.twitter.com/1.1/media/upload.json"
                 files = {"media": image_data}
                 response = auth.post(upload_url, files=files)
@@ -152,16 +163,14 @@ class TwitterBot:
 
                 media_id = response.json()["media_id"]
 
-                # Use tweepy.Client for v2 tweet creation
                 response_tweet = self.twitter_api.create_tweet(
-                    text=additional_text, 
+                    text=tweet_text, 
                     media_ids=[media_id], 
                     in_reply_to_tweet_id=mention.id
                 )
             else:
-                # If image generation fails, send a text tweet instead (using v2 API)
                 response_tweet = self.twitter_api.create_tweet(
-                    text=response_text, 
+                    text=tweet_text, 
                     in_reply_to_tweet_id=mention.id
                 )
         except Exception as e:
@@ -169,7 +178,6 @@ class TwitterBot:
             self.mentions_replied_errors += 1
             return
         
-        # Log the response in Airtable if it was successful
         self.airtable.insert({
             'mentioned_conversation_tweet_id': str(mentioned_conversation_tweet.id),
             'mentioned_conversation_tweet_text': mentioned_conversation_tweet.text,
@@ -181,27 +189,21 @@ class TwitterBot:
 
         return True
     
-    # Returns the ID of the authenticated user for tweet creation purposes
     def get_me_id(self):
         return self.twitter_api.get_me()[0].id
     
-    # Returns the parent tweet text of a mention if it exists. Otherwise returns None
-    # We use this to since we want to respond to the parent tweet, not the mention itself
     def get_mention_conversation_tweet(self, mention):
-        # Check if the mention has a conversation_id and if it matches the mention's ID
         if mention.conversation_id == mention.id:
-            return mention  # Standalone tweet, use the mention itself as the conversation tweet
+            return mention
         elif mention.conversation_id:
             conversation_tweet = self.twitter_api.get_tweet(mention.conversation_id).data
             return conversation_tweet
         return None
 
-    # Get mentioned to the user that's authenticated and running the bot.
-    # Using a lookback window of 2 hours to avoid parsing over too many tweets
     def get_mentions(self):
         since_id = redis_client.get("last_tweet_id")
         if since_id:
-            since_id = int(since_id)  # Convert to int for Twitter API
+            since_id = int(since_id)
         else:
             since_id = 1
 
@@ -211,7 +213,6 @@ class TwitterBot:
             expansions=['referenced_tweets.id'],
             tweet_fields=['created_at', 'conversation_id']).data
 
-    # Checking to see if we've already responded to a mention with what's logged in Airtable
     def check_already_responded(self, mentioned_conversation_tweet_id):
         records = self.airtable.get_all(view='Grid view')
         for record in records:
@@ -219,11 +220,9 @@ class TwitterBot:
                 return True
         return False
 
-    # Run through all mentioned tweets and generate a response
     def respond_to_mentions(self):
         mentions = self.get_mentions()
 
-        # If no mentions, just return
         if not mentions:
             print("No mentions found")
             return
@@ -231,27 +230,22 @@ class TwitterBot:
         self.mentions_found = len(mentions)
 
         for mention in mentions[:self.tweet_response_limit]:
-            # Getting the mention's conversation tweet
             mentioned_conversation_tweet = self.get_mention_conversation_tweet(mention)
         
-            # Respond if we haven't already responded to this conversation
             if not self.check_already_responded(mentioned_conversation_tweet.id):
                 self.respond_to_mention(mention, mentioned_conversation_tweet)
                 self.mentions_replied += 1
 
         return True
     
-    # The main entry point for the bot with some logging
     def execute_replies(self):
         print(f"Starting Job: {datetime.utcnow().isoformat()}")
         self.respond_to_mentions()
         print(f"Finished Job: {datetime.utcnow().isoformat()}, Found: {self.mentions_found}, Replied: {self.mentions_replied}, Errors: {self.mentions_replied_errors}")
     
     def generate_image_from_response(self, response_text):
-        # Format the response text into HTML paragraphs with proper formatting
         formatted_response_text = format_text_to_html(response_text)
 
-        # Basic HTML template with styling
         html_template = f"""
         <!DOCTYPE html>
         <html>
@@ -264,8 +258,8 @@ class TwitterBot:
             background-color: #15202B; 
             color: #FFFFFF; 
             padding: 20px; 
-            width: 1170px; /* iPhone 14 width */
-            height: 2532px; /* iPhone 14 height */
+            width: 1170px;
+            height: 2532px;
             margin: 0 auto; 
             overflow: hidden; 
             box-sizing: border-box; 
@@ -279,7 +273,7 @@ class TwitterBot:
             max-width: 100%; 
             box-sizing: border-box; 
             border: 2px solid #38444D;
-            font-size: 48px; /* Increased font size */
+            font-size: 48px;
             line-height: 1.4;
         }}
         p {{
@@ -287,7 +281,7 @@ class TwitterBot:
         }}
         h2 {{
             color: #1DA1F2;
-            font-size: 60px; /* Larger heading size */
+            font-size: 60px;
         }}
         strong {{
             color: #F5A623;
@@ -317,14 +311,12 @@ class TwitterBot:
 # Global bot instance to maintain state and avoid re-authentication
 bot = TwitterBot()
 
-# The job that we'll schedule to run every X minutes
 def job():
     print(f"Job executed at {datetime.utcnow().isoformat()}")
     bot = TwitterBot()
     bot.execute_replies()
 
 if __name__ == "__main__":
-    # Schedule the job to run every 5 minutes. Edit to your liking, but watch out for rate limits
     schedule.every(3).minutes.do(job)
     while True:
         schedule.run_pending()
