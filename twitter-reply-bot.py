@@ -167,11 +167,14 @@ class TwitterBot:
     # Returns the parent tweet text of a mention if it exists. Otherwise returns None
     # We use this to since we want to respond to the parent tweet, not the mention itself
     def get_mention_conversation_tweet(self, mention):
-        # Check to see if mention has a field 'conversation_id' and if it's not null
-        if mention.conversation_id is not None:
+        # Check if the mention has a conversation_id and if it matches the mention's ID
+        if mention.conversation_id == mention.id:
+            return mention  # Standalone tweet, use the mention itself as the conversation tweet
+        elif mention.conversation_id:
             conversation_tweet = self.twitter_api.get_tweet(mention.conversation_id).data
             return conversation_tweet
         return None
+
 
     # Get mentioned to the user that's authenticated and running the bot.
     # Using a lookback window of 2 hours to avoid parsing over too many tweets
