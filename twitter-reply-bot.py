@@ -94,7 +94,6 @@ def format_text_to_html(text):
     return '\n'.join(formatted_lines)
 
 def summarize_with_claude(text):
-    """Summarize text using Claude."""
     url = 'https://api.anthropic.com/v1/complete'
     headers = {
         'Content-Type': 'application/json',
@@ -103,14 +102,11 @@ def summarize_with_claude(text):
     }
     payload = {
         'model': 'claude-2',
-        'prompt': f'\n\nHuman: Summarize the following text in absolutely no more than 240 characters. Ensure the summary ends with a complete sentence:\n\n{text}\n\nAssistant: Here is a summary of less than or equal to 240 characters, ending with a complete sentence:',
+        'prompt': f'\n\nHuman: Summarize the following text in approximately 200 characters or less. Ensure the summary ends with a complete sentence:\n\n{text}\n\nAssistant: Here is a summary of approximately 200 characters or less, ending with a complete sentence:',
         'max_tokens_to_sample': 400,
         'temperature': 0.5,
         'stop_sequences': ["\n\nHuman:"]
     }
-    
-    logging.info(f"Headers: {headers}")
-    logging.info(f"Payload: {json.dumps(payload)}")
     
     try:
         response = requests.post(url, headers=headers, json=payload)
@@ -187,10 +183,11 @@ class TwitterBot:
             image_url = self.generate_image_from_response(response_text)
             logging.info(f"Generated image URL: {image_url}")
 
-            # Summarize the response using Claude
             summary = summarize_with_claude(response_text)
             if summary:
                 tweet_text = f"{summary}\n\nMore at ftxclaims.com"
+                if len(tweet_text) > 280:  # Twitter's character limit
+                    tweet_text = tweet_text[:277] + "..."  # Truncate if too long
             else:
                 tweet_text = "More at ftxclaims.com"  # Fallback if summarization fails
             logging.info(f"Tweet text: {tweet_text}")
