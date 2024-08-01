@@ -103,7 +103,7 @@ def summarize_with_claude(text):
     }
     payload = {
         'model': 'claude-2',
-        'prompt': f'\n\nHuman: Summarize the following text in approximately 240 characters. Ensure the summary ends with a complete sentence:\n\n{text}\n\nAssistant: Here is a summary of approximately 240 characters, ending with a complete sentence:',
+        'prompt': f'\n\nHuman: Summarize the following text in absolutely no more than 240 characters. Ensure the summary ends with a complete sentence:\n\n{text}\n\nAssistant: Here is a summary of less than or equal to 240 characters, ending with a complete sentence:',
         'max_tokens_to_sample': 400,
         'temperature': 0.5,
         'stop_sequences': ["\n\nHuman:"]
