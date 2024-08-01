@@ -11,7 +11,6 @@ import redis
 from redis import Redis
 from requests_oauthlib import OAuth1Session
 import re
-import anthropic
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -95,16 +94,23 @@ def format_text_to_html(text):
     return '\n'.join(formatted_lines)
 
 def summarize_with_claude(text):
-    client = anthropic.Anthropic(api_key=CLAUDE_API_KEY)
-    prompt = f"Summarize the following text in 200 characters or less:\n\n{text}"
+    url = "https://api.anthropic.com/v1/completions"
+    headers = {
+        "Content-Type": "application/json",
+        "X-API-Key": CLAUDE_API_KEY
+    }
+    data = {
+        "prompt": f"\n\nHuman: Summarize the following text in 200 characters or less:\n\n{text}\n\nAssistant: Here's a summary in 200 characters or less:\n\nHuman: Thank you. That's all I needed.",
+        "model": "claude-2",
+        "max_tokens_to_sample": 300,
+        "temperature": 0.5,
+        "stop_sequences": ["\n\nHuman:"]
+    }
     
     try:
-        response = client.completions.create(
-            model="claude-2",
-            prompt=prompt,
-            max_tokens_to_sample=300
-        )
-        summary = response.completion.strip()
+        response = requests.post(url, headers=headers, json=data)
+        response.raise_for_status()
+        summary = response.json()['completion'].strip()
         return summary[:200]  # Ensure it's within 200 characters
     except Exception as e:
         logging.error(f"Error summarizing with Claude: {e}")
