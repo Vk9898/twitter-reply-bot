@@ -98,7 +98,8 @@ def summarize_with_claude(text):
     url = 'https://api.anthropic.com/v1/complete'
     headers = {
         'Content-Type': 'application/json',
-        'x-api-key': CLAUDE_API_KEY
+        'x-api-key': CLAUDE_API_KEY,
+        'anthropic-version': '2023-06-01'
     }
     payload = {
         'model': 'claude-2',
