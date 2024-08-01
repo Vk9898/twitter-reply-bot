@@ -16,7 +16,6 @@ import re
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 redis_url = os.getenv("REDIS_URL")
-redis_client = redis.Redis.from_url(redis_url)
 
 # Load your API keys (preferably from environment variables)
 TWITTER_API_KEY = os.getenv("TWITTER_API_KEY")
@@ -144,6 +143,8 @@ class TwitterBot:
         self.auth = tweepy.OAuthHandler(TWITTER_API_KEY, TWITTER_API_SECRET)
         self.auth.set_access_token(TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_TOKEN_SECRET)
         self.api_v1 = tweepy.API(self.auth)
+        
+        self.redis_client = redis.Redis.from_url(redis_url)
 
     def generate_response(self, original_tweet_text, user_comment=None):
         if user_comment:
@@ -154,18 +155,23 @@ class TwitterBot:
         return get_chatbot_response(prompt)
     
     def respond_to_mention(self, mention, mentioned_conversation_tweet):
-        user_comment = mention.text if mention.id != mentioned_conversation_tweet.id else None
-        response_text = self.generate_response(mentioned_conversation_tweet.text, user_comment)
-        image_url = self.generate_image_from_response(response_text)
-        
-        # Summarize the response using Claude
-        summary = summarize_with_claude(response_text)
-        if summary:
-            tweet_text = f"{summary}\n\nMore at ftxclaims.com"
-        else:
-            tweet_text = "More at ftxclaims.com"  # Fallback if summarization fails
-
         try:
+            user_comment = mention.text if mention.id != mentioned_conversation_tweet.id else None
+            response_text = self.generate_response(mentioned_conversation_tweet.text, user_comment)
+            logging.info(f"Generated response: {response_text[:100]}...")  # Log first 100 chars of response
+
+            image_url = self.generate_image_from_response(response_text)
+            logging.info(f"Generated image URL: {image_url}")
+
+            # Summarize the response using Claude
+            summary = summarize_with_claude(response_text)
+            if summary:
+                tweet_text = f"{summary}\n\nMore at ftxclaims.com"
+            else:
+                tweet_text = "More at ftxclaims.com"  # Fallback if summarization fails
+            logging.info(f"Tweet text: {tweet_text}")
+
+            media_id = None
             if image_url:
                 auth = OAuth1Session(
                     TWITTER_API_KEY,
@@ -182,7 +188,10 @@ class TwitterBot:
                 response.raise_for_status()
 
                 media_id = response.json()["media_id"]
+                logging.info(f"Uploaded media with ID: {media_id}")
 
+            # Create tweet with or without media
+            if media_id:
                 response_tweet = self.twitter_api.create_tweet(
                     text=tweet_text, 
                     media_ids=[media_id], 
@@ -193,21 +202,23 @@ class TwitterBot:
                     text=tweet_text, 
                     in_reply_to_tweet_id=mention.id
                 )
-        except Exception as e:
-            print(e)
-            self.mentions_replied_errors += 1
-            return
-        
-        self.airtable.insert({
-            'mentioned_conversation_tweet_id': str(mentioned_conversation_tweet.id),
-            'mentioned_conversation_tweet_text': mentioned_conversation_tweet.text,
-            'tweet_response_id': response_tweet.data['id'],
-            'tweet_response_text': response_text,
-            'mentioned_at': mention.created_at.isoformat()
-        })
-        redis_client.set("last_tweet_id", str(mention.id)) 
 
-        return True
+            logging.info(f"Tweet sent successfully. Tweet ID: {response_tweet.data['id']}")
+
+            self.airtable.insert({
+                'mentioned_conversation_tweet_id': str(mentioned_conversation_tweet.id),
+                'mentioned_conversation_tweet_text': mentioned_conversation_tweet.text,
+                'tweet_response_id': response_tweet.data['id'],
+                'tweet_response_text': response_text,
+                'mentioned_at': mention.created_at.isoformat()
+            })
+
+            return True
+
+        except Exception as e:
+            logging.error(f"Error in respond_to_mention: {str(e)}")
+            self.mentions_replied_errors += 1
+            return False
     
     def get_me_id(self):
         return self.twitter_api.get_me()[0].id
@@ -232,17 +243,43 @@ class TwitterBot:
         return None
 
     def get_mentions(self):
-        since_id = redis_client.get("last_tweet_id")
-        if since_id:
-            since_id = int(since_id)
+        last_tweet_id = self.redis_client.get("last_tweet_id")
+        if last_tweet_id:
+            since_id = int(last_tweet_id)
         else:
+            # If no last_tweet_id is found, use a default value or fetch recent mentions
             since_id = 1
 
-        return self.twitter_api.get_users_mentions(
-            id=self.twitter_me_id,
-            since_id=since_id, 
-            expansions=['referenced_tweets.id'],
-            tweet_fields=['created_at', 'conversation_id']).data
+        logging.info(f"Fetching mentions since tweet ID: {since_id}")
+
+        mentions = []
+        pagination_token = None
+        max_results = 100  # Adjust this value based on your needs and rate limits
+
+        while True:
+            try:
+                response = self.twitter_api.get_users_mentions(
+                    id=self.twitter_me_id,
+                    since_id=since_id,
+                    max_results=max_results,
+                    pagination_token=pagination_token,
+                    tweet_fields=['created_at', 'conversation_id', 'in_reply_to_user_id']
+                )
+
+                if response.data:
+                    mentions.extend(response.data)
+
+                if response.meta.get('next_token'):
+                    pagination_token = response.meta['next_token']
+                else:
+                    break
+
+            except tweepy.TweepError as e:
+                logging.error(f"Error fetching mentions: {str(e)}")
+                break
+
+        logging.info(f"Fetched {len(mentions)} mentions")
+        return mentions
 
     def check_already_responded(self, mentioned_conversation_tweet_id):
         records = self.airtable.get_all(view='Grid view')
@@ -255,18 +292,30 @@ class TwitterBot:
         mentions = self.get_mentions()
 
         if not mentions:
-            print("No mentions found")
+            logging.info("No new mentions found")
             return
-    
+
         self.mentions_found = len(mentions)
+        logging.info(f"Found {self.mentions_found} new mentions")
+
+        # Sort mentions by ID to process them in chronological order
+        mentions.sort(key=lambda x: x.id)
 
         for mention in mentions[:self.tweet_response_limit]:
             mentioned_conversation_tweet = self.get_mention_conversation_tweet(mention)
-        
-            if not self.check_already_responded(mentioned_conversation_tweet.id):
-                self.respond_to_mention(mention, mentioned_conversation_tweet)
-                self.mentions_replied += 1
 
+            if not self.check_already_responded(mentioned_conversation_tweet.id):
+                success = self.respond_to_mention(mention, mentioned_conversation_tweet)
+                if success:
+                    self.mentions_replied += 1
+                    logging.info(f"Successfully replied to mention {mention.id}")
+                else:
+                    logging.warning(f"Failed to reply to mention {mention.id}")
+
+            # Update the last_tweet_id in Redis after processing each mention
+            self.redis_client.set("last_tweet_id", str(mention.id))
+
+        logging.info(f"Mentions found: {self.mentions_found}, Replied: {self.mentions_replied}, Errors: {self.mentions_replied_errors}")
         return True
     
     def execute_replies(self):
@@ -350,7 +399,6 @@ bot = TwitterBot()
 
 def job():
     print(f"Job executed at {datetime.utcnow().isoformat()}")
-    bot = TwitterBot()
     bot.execute_replies()
 
 if __name__ == "__main__":
