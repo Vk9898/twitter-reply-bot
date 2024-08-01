@@ -94,28 +94,32 @@ def format_text_to_html(text):
     return '\n'.join(formatted_lines)
 
 def summarize_with_claude(text):
-    url = "https://api.anthropic.com/v1/messages"
+    """Summarize text using Claude."""
+    url = 'https://api.anthropic.com/v1/complete'
     headers = {
-        "Content-Type": "application/json",
-        "X-API-Key": CLAUDE_API_KEY,
-        "anthropic-version": "2023-06-01"
+        'Content-Type': 'application/json',
+        'x-api-key': CLAUDE_API_KEY
     }
-    data = {
-        "model": "claude-2",
-        "max_tokens": 300,
-        "temperature": 0.5,
-        "messages": [
-            {"role": "user", "content": f"Summarize the following text in 200 characters or less:\n\n{text}"}
-        ]
+    payload = {
+        'model': 'claude-2',
+        'prompt': f'\n\nHuman: Summarize the following text in 200 characters or less:\n\n{text}\n\nAssistant: Here is a summary in 200 characters or less:',
+        'max_tokens_to_sample': 300,
+        'temperature': 0.5,
+        'stop_sequences': ["\n\nHuman:"]
     }
     
+    logging.info(f"Headers: {headers}")
+    logging.info(f"Payload: {json.dumps(payload)}")
+    
     try:
-        response = requests.post(url, headers=headers, json=data)
+        response = requests.post(url, headers=headers, json=payload)
         response.raise_for_status()
-        summary = response.json()['content'][0]['text'].strip()
+        summary = response.json().get('completion', '').strip()
         return summary[:200]  # Ensure it's within 200 characters
-    except Exception as e:
+    except requests.exceptions.RequestException as e:
         logging.error(f"Error summarizing with Claude: {e}")
+        if response is not None:
+            logging.error(f"Response content: {response.content}")
         return None
 
 class TwitterBot:
