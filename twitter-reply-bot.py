@@ -187,7 +187,7 @@ class TwitterBot:
             if summary:
                 tweet_text = f"{summary}\n\nMore at ftxclaims.com"
                 if len(tweet_text) > 280:  # Twitter's character limit
-                    tweet_text = tweet_text[:277] + "..."  # Truncate if too long
+                    tweet_text = tweet_text[:265] + "..."  # Truncate if too long
             else:
                 tweet_text = "More at ftxclaims.com"  # Fallback if summarization fails
             logging.info(f"Tweet text: {tweet_text}")
