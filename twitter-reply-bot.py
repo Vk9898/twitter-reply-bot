@@ -261,9 +261,9 @@ class TwitterBot:
         @import url('https://fonts.googleapis.com/css2?family=Roboto&display=swap');
         body {{ 
             font-family: 'Roboto', sans-serif; 
-            background-color: white; 
-            color: black; 
-            padding: 10px; 
+            background-color: #15202B; 
+            color: #FFFFFF; 
+            padding: 20px; 
             width: 1170px; /* iPhone 14 width */
             height: 2532px; /* iPhone 14 height */
             margin: 0 auto; 
@@ -271,17 +271,26 @@ class TwitterBot:
             box-sizing: border-box; 
         }}
         .response-box {{ 
-            background-color: #fff2ac;
-            background-image: linear-gradient(to right, #ffe359 0%, #fff2ac 100%);
-            padding: 15px; 
-            border-radius: 8px; 
+            background-color: #192734;
+            padding: 30px; 
+            border-radius: 16px; 
             overflow-wrap: break-word;
             word-wrap: break-word; 
-            max-width: 100%; /* Ensure the box doesn't overflow its container */
-            box-sizing: border-box; /* Include padding and border in the element's total width and height */
+            max-width: 100%; 
+            box-sizing: border-box; 
+            border: 2px solid #38444D;
+            font-size: 48px; /* Increased font size */
+            line-height: 1.4;
         }}
         p {{
-            margin: 1em 0; /* Add margin between paragraphs */
+            margin: 1em 0; 
+        }}
+        h2 {{
+            color: #1DA1F2;
+            font-size: 60px; /* Larger heading size */
+        }}
+        strong {{
+            color: #F5A623;
         }}
         </style>
         </head>
