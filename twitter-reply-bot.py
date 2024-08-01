@@ -79,6 +79,7 @@ def get_chatbot_response(user_message):
         return "I'm sorry, I couldn't process your request at this time."
 
 def format_text_to_html(text):
+    text = re.sub(r'^### (.+)$', r'<h3>\1</h3>', text, flags=re.MULTILINE)
     text = re.sub(r'^## (.+)$', r'<h2>\1</h2>', text, flags=re.MULTILINE)
     text = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', text)
     
@@ -87,7 +88,7 @@ def format_text_to_html(text):
     for line in lines:
         if line.strip() == '':
             continue
-        if not (line.startswith('<h2>') or line.startswith('<strong>')):
+        if not (line.startswith('<h2>') or line.startswith('<h3>') or line.startswith('<strong>')):
             line = f'<p>{line}</p>'
         formatted_lines.append(line)
     
@@ -103,8 +104,8 @@ def summarize_with_claude(text):
     }
     payload = {
         'model': 'claude-2',
-        'prompt': f'\n\nHuman: Summarize the following text in 200 characters or less:\n\n{text}\n\nAssistant: Here is a summary in 200 characters or less:',
-        'max_tokens_to_sample': 300,
+        'prompt': f'\n\nHuman: Summarize the following text in approximately 240 characters. Ensure the summary ends with a complete sentence:\n\n{text}\n\nAssistant: Here is a summary of approximately 240 characters, ending with a complete sentence:',
+        'max_tokens_to_sample': 400,
         'temperature': 0.5,
         'stop_sequences': ["\n\nHuman:"]
     }
@@ -116,7 +117,7 @@ def summarize_with_claude(text):
         response = requests.post(url, headers=headers, json=payload)
         response.raise_for_status()
         summary = response.json().get('completion', '').strip()
-        return summary[:200]  # Ensure it's within 200 characters
+        return summary
     except requests.exceptions.RequestException as e:
         logging.error(f"Error summarizing with Claude: {e}")
         if response is not None:
@@ -283,11 +284,12 @@ class TwitterBot:
             border-radius: 16px; 
             overflow-wrap: break-word;
             word-wrap: break-word; 
-            max-width: 100%; 
+            width: calc(100% - 40px); 
             box-sizing: border-box; 
             border: 2px solid #38444D;
             font-size: 48px;
             line-height: 1.4;
+            margin: 20px auto;
         }}
         p {{
             margin: 1em 0; 
@@ -295,6 +297,11 @@ class TwitterBot:
         h2 {{
             color: #1DA1F2;
             font-size: 60px;
+        }}
+        h3 {{
+            color: #F5A623;
+            font-size: 54px;
+            font-weight: bold;
         }}
         strong {{
             color: #F5A623;
